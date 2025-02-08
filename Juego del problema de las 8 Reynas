@@ -1,3 +1,153 @@
-Códgio desarrollado en Python empleando librerías de Numpy, Pandas y PythonGames.
-Este proyecto se realizó en el curso de Programación Avanzada en el ciclo 23-2 de
-la universidad Cayetano Heredia.
+Códgio desarrollado en Python empleando librerías de Tkinter y time. Este proyecto se 
+realizó en el curso de Programación Avanzada en el ciclo 23-2 de la universidad Cayetano 
+Heredia.
+
+#Proyecto Final
+#Desarrollado por: José Zapata Castro
+
+#Importación de las librerías:
+import tkinter as tk
+import time
+import tkinter.messagebox as mb
+
+#Programa base:
+class ProblemaDeLas8Reinas:
+    def __init__(self, maestro):
+        #Creación de la ventana
+        self.maestro = maestro
+        self.maestro.title("Problema de las Ocho Reinas")
+
+        #Longitud del tablero (casillas):
+        self.Tablero = 8
+
+        #Listas para guardar las posiciones y soluciones:
+        self.Reinas = [-1] * self.Tablero
+        self.Soluciones = []
+
+        #Centinelas:
+        self.AutoProgre = False
+        self.MostrarSoluciones = False
+
+        self.canvas = tk.Canvas(self.maestro, width=400, height=400)
+        self.canvas.pack()
+        self.canvas.bind("<Button-1>", self.ManualPosi)
+
+        #Creación de los botones
+        self.StartButton = tk.Button(self.maestro, text="Iniciar Juego", command=self.IniciarJuego)
+        self.StartButton.pack()
+
+        self.AutomaticButton = tk.Button(self.maestro, text="Opción Automática", command=self.AutomaticoPosi)
+        self.AutomaticButton.pack()
+
+        self.ShowSoluButton = tk.Button(self.maestro, text="Mostrar Soluciones", command=self.MostrarTodSol)
+        self.ShowSoluButton.pack()
+
+        self.RestartButton = tk.Button(self.maestro, text="Reiniciar Juego", command=self.ReiniciarJuego)
+        self.RestartButton.pack()
+
+
+    #Definición de las funciones:
+    def CrearTablero(self):
+        self.canvas.delete("all")
+        Casilla = 400 // self.Tablero
+
+        #Si la casilla es impar, será blanca. Si es par, será gris
+        for i in range(self.Tablero):
+            for j in range(self.Tablero):
+                if (i + j) % 2 == 0:
+                    color = "gray" 
+                else:
+                    color = "white"
+                    
+                self.canvas.create_rectangle(j * Casilla, i * Casilla, (j + 1) * Casilla, (i + 1) * Casilla, fill = color)#Asignación del color
+
+    def MostrarReinas(self):
+        self.canvas.delete("queens")
+        Casilla = 400 // self.Tablero
+
+        for rep, col in enumerate(self.Reinas):
+            if col != -1:
+                x = col * Casilla + Casilla // 2
+                y = rep * Casilla + Casilla // 2
+                self.canvas.create_text(x, y, text="♛", font=("Arial", Casilla // 2), tags="queens") #sintaxis sacada de google, también pude importar
+                                                                                                      #una imagen descargada.
+                
+    #Esta función es clave para el posicionamiento manual, verifica que una reina no coincida con otra en la misma fila, columna o diagonal.
+    def VerificarPos(self, rep, col):
+        for rep_previa in range(rep):
+            if (self.Reinas[rep_previa] == col or
+                self.Reinas[rep_previa] - rep_previa == col - rep or
+                self.Reinas[rep_previa] + rep_previa == col + rep):
+                return False
+        return True
+
+    #Función recursiva que utiliza el algoritmo de retroceso para encontrar todas las posibles soluciones al problema.
+    def SolucionReinas(self, rep):
+        if rep == self.Tablero:
+            self.Soluciones.append(self.Reinas.copy())
+            return
+
+        for col in range(self.Tablero):
+            if self.AutoProgre and not self.MostrarSoluciones:
+                if self.VerificarPos(rep, col):
+                    self.Reinas[rep] = col
+                    self.MostrarReinas()
+                    self.maestro.update()
+                    time.sleep(2)  #Delay para visualizar las soluciones
+
+                    self.SolucionReinas(rep + 1) #Esto inicia el proceso de colocar la siguiente reina en la fila siguiente
+            else:
+                break #Fin de la iteración
+
+    def Victoria(self):
+        return all(col != -1 for col in self.Reinas)
+        #Si col es diferente de -1 para todas las filas, significa que se han colocado todas las reinas.
+
+    def IniciarJuego(self):
+        self.CrearTablero()
+        self.MostrarReinas()
+
+    def AutomaticoPosi(self):
+        self.AutoProgre = True
+        self.MostrarSoluciones = False
+        self.Soluciones = []
+        self.SolucionReinas(0)
+
+    def MostrarTodSol(self):
+        self.AutoProgre = False
+        self.MostrarSoluciones = True
+        for Solucion in self.Soluciones:
+            self.Reinas = Solucion
+            self.MostrarReinas()
+            self.maestro.update()
+            time.sleep(2)  #Delay para visualizar
+
+    def ReiniciarJuego(self):
+        #Cambio de lógica de los centinelas para reiniciar el programa.
+        self.AutoProgre = False
+        self.MostrarSoluciones = False
+        self.Reinas = [-1] * self.Tablero
+        self.Soluciones = []
+        self.CrearTablero()
+        self.MostrarReinas()
+
+    def ManualPosi(self, event):
+        #Lo mismo que lo anterior, pero con lógica inversa para los centinelas
+        if not self.AutoProgre and not self.MostrarSoluciones:
+            Casilla = 400 // self.Tablero
+            col = event.x // Casilla
+            rep = event.y // Casilla
+
+            if 0 <= rep < self.Tablero and 0 <= col < self.Tablero and self.VerificarPos(rep, col):
+                self.Reinas[rep] = col
+                self.MostrarReinas()
+
+                if self.Victoria():
+                    mb.showinfo("Felicitaciones, solución encontrada")
+                    #self.ReiniciarJuego()
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = ProblemaDeLas8Reinas(root)
+    root.mainloop()
+
