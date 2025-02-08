@@ -1,0 +1,396 @@
+Proyecto desarrollado como una continuación del proyecto Jumpy Jam donde se buscaba
+la adherencia de los pacientes de ACV al proceso de rehabilitación. Este nuevo prototipo
+usa Soft Robotics para una mayor gestión de los movimientos y obtención de datos muestrea-
+dos durante la realización de los ejercicios terapéuticos, a su vez empleando un videojue-
+go interactivo.
+
+Videos del funcionamiento del prototipo:
+https://drive.google.com/drive/folders/1HOUZgpTCe4uTu2R6V4RME1Y8ks7Ww3fd
+
+Código del ESP32:
+#include <BluetoothSerial.h> // Incluir librería de Bluetooth
+BluetoothSerial SerialBT;    // Crear objeto Bluetooth
+int contador = 0;
+double x1, x2, x3;
+double y1, y2, y3;
+// Se definen las entradas analógicas del esp32/arduino
+#define FLEX_1 36  // A0 (VP)
+#define FLEX_2 39  // A1 (VA)
+#define FLEX_3 34  // A2
+#define SENSOR_1 35 // A3
+#define SENSOR_2 32 // A4
+#define SENSOR_3 33 // A5
+// Pines de salidas digitales del esp32/arduino
+#define LED_1 21 // 7
+#define LED_2 19 // 6
+#define LED_3 18 // 5
+void setup() {
+  SerialBT.begin("BT_Prototipo"); // Nombre del dispositivo Bluetooth
+  Serial.begin(9600);
+  // Configuración de pines de entrada
+  pinMode(FLEX_1, INPUT);
+  pinMode(FLEX_2, INPUT);
+  pinMode(FLEX_3, INPUT);
+  pinMode(SENSOR_1, INPUT);
+  pinMode(SENSOR_2, INPUT);
+  pinMode(SENSOR_3, INPUT);
+  // Configuración de pines de salida
+  pinMode(LED_1, OUTPUT);
+  pinMode(LED_2, OUTPUT);
+  pinMode(LED_3, OUTPUT);
+}
+void loop() {
+  // Lectura del sf1
+  if (analogRead(FLEX_1) < 1001) {
+    digitalWrite(LED_1, HIGH);
+  } else {
+    digitalWrite(LED_1, LOW);
+  }
+  // Lectura del sf2
+  if (analogRead(FLEX_2) < 1001) {
+    digitalWrite(LED_2, HIGH);
+  } else {
+    digitalWrite(LED_2, LOW);
+  }
+  // Lectura del sf3
+  if (analogRead(FLEX_3) < 1001) {
+    digitalWrite(LED_3, HIGH);
+  } else {
+    digitalWrite(LED_3, LOW);
+  }
+  //Verifica si los sensores flex se lograron extender mas de 45º
+  if (analogRead(FLEX_1) < 1001 && analogRead(FLEX_2) < 1001 && analogRead(FLEX_3) < 1001) {
+    dedosextendidos();
+  }
+  delay(100);
+}
+// Función de cálculo de fuerza
+void dedosextendidos() {
+  contador++;
+  Serial.print("Interrupción detectada: ");
+  Serial.println(contador);
+  // Fuerza del SP1
+  x1 = analogRead(SENSOR_1);
+  y1 = calcularFuerza(x1);
+  Serial.print("Fuerza dedo 1 (N): ");
+  Serial.println(y1);
+  // Fuerza del SP2
+  x2 = analogRead(SENSOR_2);
+  y2 = calcularFuerza(x2);
+  Serial.print("Fuerza dedo 2 (N): ");
+  Serial.println(y2);
+  // Fuerza del SP3
+  x3 = analogRead(SENSOR_3);
+  y3 = calcularFuerza(x3);
+  Serial.print("Fuerza dedo 3 (N): ");
+  Serial.println(y3);
+  // Transmision de datos por BT
+  SerialBT.print("Fuerza dedo 1 (N): ");
+  SerialBT.println(y1);
+  SerialBT.print("Fuerza dedo 2 (N): ");
+  SerialBT.println(y2);
+  SerialBT.print("Fuerza dedo 3 (N): ");
+  SerialBT.println(y3);
+  // Iteracion para esperar que los sensores sean menos de 45º
+  while (analogRead(FLEX_1) < 1001 && analogRead(FLEX_2) < 1001 && analogRead(FLEX_3) < 1001) {
+  }
+}
+// Función para convertir el valor analógico en fuerza
+double calcularFuerza(double x) {
+  if (x > 555 && x <= 598) {
+    return 10 - 2 * (x - 557) / 41;
+  } else if (x > 598 && x <= 647) {
+    return 8 - 2 * (x - 598) / 49;
+  } else if (x > 647 && x <= 709) {
+    return 6 - (x - 647) / 31;
+  } else if (x > 709 && x <= 804) {
+    return 4 - 2 * (x - 709) / 95;
+  } else if (x > 804 && x <= 1025) {
+    return 2 - 2 * (x - 804) / 219;
+  }
+  return 0;
+}
+
+Código del videojuego: 
+import pygame
+import sys
+
+# Inicializar Pygame
+pygame.init()
+
+# Configurar la pantalla
+screen_width, screen_height = 800, 600
+screen = pygame.display.set_mode((screen_width, screen_height))
+pygame.display.set_caption("Prototipo de Videojuego")
+
+# Colores
+WHITE = (255, 255, 255)
+GREEN = (0, 255, 0)
+BLUE = (0, 0, 255)
+BROWN = (139, 69, 19)  # Color para los bloques
+BLACK = (0, 0, 0)
+
+# Clase para el jugador
+class Player(pygame.sprite.Sprite):
+    def __init__(self):
+        super().__init__()
+        self.image = pygame.Surface((50, 50))
+        self.image.fill(BLUE)
+        self.rect = self.image.get_rect()
+        self.rect.center = (screen_width // 2, screen_height // 2)
+        self.gravity = 1
+        self.velocity_y = 0
+        self.jumping = False
+        self.speed = 5
+
+    def update(self, blocks):
+        # Movimiento horizontal
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_a]:  # Mover a la izquierda
+            self.rect.x -= self.speed
+        if keys[pygame.K_d]:  # Mover a la derecha
+            self.rect.x += self.speed
+        
+        # Aplicar gravedad
+        self.rect.y += self.velocity_y
+        self.velocity_y += self.gravity
+        
+        # Colisiones con los bloques
+        for block in blocks:
+            if self.rect.colliderect(block.rect):
+                if self.velocity_y > 0:  # Caer
+                    self.rect.bottom = block.rect.top
+                    self.jumping = False
+                    self.velocity_y = 0
+                elif self.velocity_y < 0:  # Saltar
+                    self.rect.top = block.rect.bottom
+                    self.velocity_y = 0
+
+        # Rebotar al tocar el suelo
+        if self.rect.bottom >= screen_height - 50:
+            self.rect.bottom = screen_height - 50
+            self.jumping = False
+            self.velocity_y = 0
+
+    def jump(self):
+        if not self.jumping:
+            self.velocity_y = -15
+            self.jumping = True
+
+# Clase para los bloques
+class Block(pygame.sprite.Sprite):
+    def __init__(self, x, y, width, height):
+        super().__init__()
+        self.image = pygame.Surface((width, height))
+        self.image.fill(BROWN)
+        self.rect = self.image.get_rect()
+        self.rect.topleft = (x, y)
+
+# Clase para la bandera
+class Flag(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+        self.image = pygame.Surface((30, 60))
+        self.image.fill(GREEN)
+        self.rect = self.image.get_rect()
+        self.rect.topleft = (x, y)
+
+# Clase para los cuadrados de derrota
+class OrangeSquare(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+        self.image = pygame.Surface((30, 30))  # Tamaño del cuadrado
+        self.image.fill((255, 165, 0))  # Color naranja
+        self.rect = self.image.get_rect()
+        self.rect.topleft = (x, y)
+
+# Función para crear un nivel
+def create_level(level_number):
+    blocks = pygame.sprite.Group()
+    all_sprites = pygame.sprite.Group()
+    flag = None  # Variable para almacenar la bandera
+    orange_squares = pygame.sprite.Group()  # Grupo para los cuadrados naranjas
+    player_initial_position = (screen_width // 2, screen_height // 2)  # Posición inicial del jugador
+
+    if level_number == 1:
+        # Crear el primer nivel
+        block1 = Block(300, 400, 200, 20)
+        block2 = Block(500, 300, 200, 20)
+        block3 = Block(100, 450, 100, 20)
+        block4 = Block(800, 200, 150, 20)
+        block5 = Block(950, 150, 200, 20)
+        block6 = Block(1100, 400, 100, 20)
+        
+        # Crear la bandera
+        flag = Flag(1100, 340)
+
+        blocks.add(block1, block2, block3, block4, block5, block6)
+        all_sprites.add(block1, block2, block3, block4, block5, block6, flag)
+
+    elif level_number == 2:
+        # Crear el segundo nivel
+        block1 = Block(400, 450, 200, 20)
+        block2 = Block(600, 350, 200, 20)
+        block3 = Block(200, 500, 100, 20)
+        block4 = Block(900, 300, 150, 20)
+        block5 = Block(1050, 200, 200, 20)
+        block6 = Block(1200, 450, 100, 20)
+
+        # Crear la bandera
+        flag = Flag(1200, 390)
+
+        blocks.add(block1, block2, block3, block4, block5, block6)
+        all_sprites.add(block1, block2, block3, block4, block5, block6, flag)
+
+        # Crear los cuadrados naranjas en contacto con la base verde
+        orange_positions = [180, 340, 840, 960, 1100, 1400]  # Posiciones más separadas
+        for x in orange_positions:
+            square = OrangeSquare(x, 521)  # Ajustado para estar en contacto con la base verde
+            orange_squares.add(square)
+            all_sprites.add(square)
+
+    return all_sprites, blocks, flag, orange_squares, player_initial_position  # Devolver la posición inicial del jugador
+
+# Función para el menú principal
+def main_menu():
+    while True:
+        screen.fill(WHITE)
+        font = pygame.font.Font(None, 74)
+        title_text = font.render("Prototipo de Videojuego", True, BLACK)
+        
+        # Botones de nivel
+        level1_button = pygame.Rect(screen_width // 2 - 100, 250, 150, 50)
+        level2_button = pygame.Rect(screen_width // 2 - 100, 350, 150, 50)
+
+        # Dibujar texto y botones
+        screen.blit(title_text, (screen_width // 2 - title_text.get_width() // 2, 100))
+        
+        # Colores por defecto
+        button_color = GREEN
+        pygame.draw.rect(screen, button_color, level1_button)
+        pygame.draw.rect(screen, button_color, level2_button)
+
+        level1_text = font.render("Nivel 1", True, BLACK)
+        level2_text = font.render("Nivel 2", True, BLACK)
+
+        # Centrar texto en los botones
+        screen.blit(level1_text, (level1_button.centerx - level1_text.get_width() // 2, level1_button.centery - level1_text.get_height() // 2))
+        screen.blit(level2_text, (level2_button.centerx - level2_text.get_width() // 2, level2_button.centery - level2_text.get_height() // 2))
+
+        pygame.display.flip()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 1:  # Verificar si se hizo clic con el botón izquierdo
+                    if level1_button.collidepoint(event.pos):
+                        return 1  # Seleccionar nivel 1
+                    elif level2_button.collidepoint(event.pos):
+                        return 2  # Seleccionar nivel 2
+
+# Función para el menú de pausa
+def pause_menu():
+    while True:
+        screen.fill(WHITE)
+        font = pygame.font.Font(None, 74)
+        pause_text = font.render("Pausa", True, BLACK)
+        
+        # Botones de pausa
+        resume_button = pygame.Rect(screen_width // 2 - 100, 250, 200, 50)
+        quit_button = pygame.Rect(screen_width // 2 - 100, 350, 200, 50)
+        menu_button = pygame.Rect(screen_width // 2 - 100, 450, 200, 50)
+
+        # Dibujar texto y botones
+        screen.blit(pause_text, (screen_width // 2 - pause_text.get_width() // 2, 100))
+        pygame.draw.rect(screen, GREEN, resume_button)
+        pygame.draw.rect(screen, GREEN, quit_button)
+        pygame.draw.rect(screen, GREEN, menu_button)
+
+        resume_text = font.render("Continuar", True, BLACK)
+        quit_text = font.render("Salir", True, BLACK)
+        menu_text = font.render("Volver al menú", True, BLACK)
+
+        screen.blit(resume_text, (resume_button.centerx - resume_text.get_width() // 2, resume_button.centery - resume_text.get_height() // 2))
+        screen.blit(quit_text, (quit_button.centerx - quit_text.get_width() // 2, quit_button.centery - quit_text.get_height() // 2))
+        screen.blit(menu_text, (menu_button.centerx - menu_text.get_width() // 2, menu_button.centery - menu_text.get_height() // 2))
+
+        pygame.display.flip()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 1:  # Verificar si se hizo clic con el botón izquierdo
+                    if resume_button.collidepoint(event.pos):
+                        return "continue"  # Continuar juego
+                    elif quit_button.collidepoint(event.pos):
+                        pygame.quit()
+                        sys.exit()  # Salir del juego
+                    elif menu_button.collidepoint(event.pos):
+                        return "menu"  # Volver al menú
+
+# Bucle principal del juego
+clock = pygame.time.Clock()
+
+while True:
+    level_number = main_menu()  # Seleccionar el nivel desde el menú
+
+    while True:
+        all_sprites, blocks, flag, orange_squares, player_initial_position = create_level(level_number)
+        
+        player = Player()
+        player.rect.center = player_initial_position  # Establecer la posición inicial del jugador
+        all_sprites.add(player)
+
+        while True:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_SPACE:
+                        player.jump()
+                    if event.key == pygame.K_ESCAPE:  # Cuando se presiona ESC
+                        pause_response = pause_menu()  # Mostrar el menú de pausa
+                        if pause_response == "menu":  # Si se selecciona Volver al menú
+                            break  # Salir del bucle de nivel y regresar al menú principal
+                        elif pause_response == "continue":
+                            continue  # Continuar el juego
+
+            player.update(blocks)
+
+            if player.rect.colliderect(flag.rect):  # Colisión con la bandera
+                response = flag_dialog()
+                if response == "restart":
+                    break  # Reiniciar el nivel
+
+            # Verificar colisiones con los cuadrados naranjas
+            for square in orange_squares:
+                if player.rect.colliderect(square.rect):
+                    response = loss_dialog()
+                    if response == "restart":
+                        break  # Reiniciar el nivel
+
+            # Desplazamiento de la cámara
+            if player.rect.right > screen_width / 2:
+                camera_x = player.rect.right - screen_width / 2
+
+            # Dibujar todo
+            screen.fill(WHITE)
+            pygame.draw.rect(screen, GREEN, (0, screen_height - 50, screen_width, 50))  # Suelo verde
+
+            for block in blocks:
+                screen.blit(block.image, (block.rect.x - camera_x, block.rect.y))
+            for sprite in all_sprites:
+                screen.blit(sprite.image, (sprite.rect.x - camera_x, sprite.rect.y))
+
+            pygame.display.flip()
+            clock.tick(60)
+
+        if pause_response == "menu":
+            break  # Regresar al menú principal después de pausar
+
